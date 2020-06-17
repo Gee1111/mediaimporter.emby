@@ -10,6 +10,7 @@ import socket
 
 from six import iteritems
 
+import xbmc  # pylint: disable=import-error
 import xbmcmediaimport  # pylint: disable=import-error
 
 import emby
@@ -17,6 +18,7 @@ from emby.server import Server
 
 from lib import kodi
 from lib.monitor import Monitor
+from lib.settings import ProviderSettings
 from lib.utils import log
 
 
@@ -76,8 +78,15 @@ class DiscoveryService:
 
         providerId = Server.BuildProviderId(server.id)
         providerIconUrl = Server.BuildIconUrl(server.address)
-        mediaProvider = xbmcmediaimport.MediaProvider(providerId, server.address, server.name, providerIconUrl,
+        mediaProvider = xbmcmediaimport.MediaProvider(providerId, server.name, providerIconUrl,
                                                       emby.constants.SUPPORTED_MEDIA_TYPES)
+
+        settings = mediaProvider.prepareSettings()
+        if not settings:
+            log('cannot prepare media provider settings', xbmc.LOGERROR)
+            return
+
+        ProviderSettings.SetUrl(settings, server.address)
         mediaProvider.setIconUrl(kodi.Api.downloadIcon(mediaProvider))
 
         if xbmcmediaimport.addAndActivateProvider(mediaProvider):

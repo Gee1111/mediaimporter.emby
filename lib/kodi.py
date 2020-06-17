@@ -23,6 +23,7 @@ from emby.api.library import Library
 from emby import constants
 from emby.server import Server
 
+from lib.settings import ProviderSettings
 from lib.utils import __addon__, log, mediaProvider2str, Url
 
 # mapping of Kodi and Emby media types
@@ -46,9 +47,6 @@ class Api:
             return False
 
         if lhs.getIdentifier() != rhs.getIdentifier():
-            return False
-
-        if lhs.getBasePath() != rhs.getBasePath():
             return False
 
         if lhs.getFriendlyName() != rhs.getFriendlyName():
@@ -620,7 +618,7 @@ class Api:
             basePath = xbmc.translatePath(__addon__.getAddonInfo('profile'))
 
         # determine the icon's URL on the media provider
-        iconUrl = Server.BuildIconUrl(mediaProvider.getBasePath())
+        iconUrl = Server.BuildIconUrl(ProviderSettings.GetUrl(mediaProvider))
 
         # make sure the addon data directory exists
         if not xbmcvfs.exists(basePath):

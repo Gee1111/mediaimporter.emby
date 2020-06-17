@@ -6,6 +6,7 @@
 #  See LICENSES/README.md for more information.
 #
 
+from datetime import timezone
 import sys
 import time
 import uuid
@@ -28,8 +29,8 @@ from emby.request import Request
 from emby.server import Server
 
 from lib import kodi
-from lib.settings import ImportSettings, SynchronizationSettings
-from lib.utils import __addon__, localise, log, mediaProvider2str, Url, utc
+from lib.settings import ImportSettings, ProviderSettings, SynchronizationSettings
+from lib.utils import __addon__, localise, log, mediaProvider2str, Url
 
 # list of fields to retrieve
 EMBY_ITEM_FIELDS = [
@@ -117,8 +118,15 @@ def discoverProviderLocally(handle, options):  # pylint: disable=unused-argument
 
     providerId = Server.BuildProviderId(serverInfo.id)
     providerIconUrl = Server.BuildIconUrl(baseUrl)
-    provider = xbmcmediaimport.MediaProvider(providerId, baseUrl, serverInfo.name, providerIconUrl,
+    provider = xbmcmediaimport.MediaProvider(providerId, serverInfo.name, providerIconUrl,
                                              emby.constants.SUPPORTED_MEDIA_TYPES)
+
+    settings = provider.prepareSettings()
+    if not settings:
+        log('cannot prepare media provider settings', xbmc.LOGERROR)
+        return
+
+    ProviderSettings.SetUrl(settings, baseUrl)
     provider.setIconUrl(kodi.Api.downloadIcon(provider))
 
     # store local authentication in settings
@@ -190,7 +198,7 @@ def linkEmbyConnect(handle, _):
         return
 
     # make sure the configured Emby server is still accessible
-    serverUrl = mediaProvider.getBasePath()
+    serverUrl = ProviderSettings.GetUrl(providerSettings)
     matchingServer = None
     serverId = Server.GetServerId(mediaProvider.getIdentifier())
 
@@ -289,8 +297,15 @@ def discoverProviderWithEmbyConnect(handle, options):  # pylint: disable=unused-
 
     providerId = Server.BuildProviderId(server.systemId)
     providerIconUrl = Server.BuildIconUrl(baseUrl)
-    provider = xbmcmediaimport.MediaProvider(providerId, baseUrl, server.name, providerIconUrl,
+    provider = xbmcmediaimport.MediaProvider(providerId, server.name, providerIconUrl,
                                              emby.constants.SUPPORTED_MEDIA_TYPES)
+
+    settings = provider.prepareSettings()
+    if not settings:
+        log('cannot prepare media provider settings', xbmc.LOGERROR)
+        return
+
+    ProviderSettings.SetUrl(settings, baseUrl)
     provider.setIconUrl(kodi.Api.downloadIcon(provider))
 
     # store Emby connect authentication in settings
@@ -364,7 +379,7 @@ def settingOptionsFillerUsers(handle, _):
     settings = mediaProvider.getSettings()
 
     users = [(__addon__.getLocalizedString(32015), emby.constants.SETTING_PROVIDER_USER_OPTION_MANUAL)]
-    publicUsers = User.GetPublicUsers(mediaProvider.getBasePath(),
+    publicUsers = User.GetPublicUsers(ProviderSettings.GetUrl(settings),
                                       deviceId=settings.getString(emby.constants.SETTING_PROVIDER_DEVICEID))
     users.extend([(user.name, user.id) for user in publicUsers])
 
@@ -489,11 +504,16 @@ def lookupProvider(handle, _):
         log('cannot retrieve media provider', xbmc.LOGERROR)
         return
 
-    basePath = mediaProvider.getBasePath()
+    settings = mediaProvider.prepareSettings()
+    if not settings:
+        log('cannot prepare media provider settings', xbmc.LOGERROR)
+        return
+
+    baseUrl = ProviderSettings.GetUrl(settings)
 
     providerFound = False
     try:
-        if emby.api.server.Server.GetInfo(basePath):
+        if emby.api.server.Server.GetInfo(baseUrl):
             providerFound = True
     except:
         pass
@@ -716,7 +736,7 @@ def execImport(handle, options):
                 fastSync = True
 
                 # convert the last sync datetime string to ISO 8601
-                lastSync = parser.parse(lastSync).astimezone(utc).isoformat(timespec='seconds')
+                lastSync = parser.parse(lastSync).astimezone(timezone.utc).isoformat(timespec='seconds')
 
                 syncUrlOptions.update({
                     # only set MinDateLastSavedForUser because it already covers DateLastSaved, RatingLastModified
